@@ -1,0 +1,6 @@
+/build/
+/profiles.tsv
+/profiles.tsv.tmp.*
+.DS_Store
+/.poker-cache/
+/.poker-hands/
