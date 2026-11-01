@@ -345,7 +345,7 @@ static bool model_evaluate(const ModelData *train, const ModelData *test)
     double baseline[3] = {1, 1, 1};
     for (i = 0; i < train->count; ++i) ++baseline[train->rows[i].action];
     for (int a = 0; a < 3; ++a) baseline[a] /= train->count + 3.0;
-    ModelMetrics metrics[2] = {{0}, {0}};
+    ModelMetrics metrics[2] = {0};
     for (i = 0; i < test->count; ++i) {
         ModelEstimate e = model_estimate(train, &test->rows[i]);
         model_score(&metrics[0], baseline, test->rows[i].action);
