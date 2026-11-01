@@ -17,6 +17,50 @@ make sanitize
 
 The executable is `build/poker`. GitHub Actions builds and tests on macOS and Linux. Tests include all 2,598,960 five-card hands, tie-breaking, blockers, multiway equity, persistent data validation, and CLI integration.
 
+## Starting-Hand Catalog
+
+Build reusable equity estimates for all **169 starting-hand classes** with parallel workers. The shell can run this in the background while you use other commands:
+
+```sh
+./build/poker catalog build --trials 20000 --jobs 4 \
+  > /tmp/poker-catalog.tsv 2> /tmp/poker-catalog.log &
+
+./build/poker catalog show --hero AsKh --trials 20000
+./build/poker catalog show --trials 20000
+```
+
+`build` fills missing cache entries and reuses completed work. `show` only reads cache results; it never starts a simulation. Missing entries are reported as pending. Use matching seed, trials, ranges, and opponent count when looking up a catalog. Jobs affect concurrency, not results. Stop a background job with your shell's job control; completed entries remain reusable.
+
+By default, the catalog compares each class to one random opponent. Study a tight range or premium class instead:
+
+```sh
+./build/poker catalog build --range 'AA,KK,QQ,JJ,AK' --trials 10000 --jobs 4
+./build/poker catalog show --hero AsQh --range 'AA,KK,QQ,JJ,AK' --trials 10000
+
+./build/poker catalog build --range QQ --trials 10000 --jobs 4
+./build/poker catalog show --hero AsKh --range QQ --trials 10000
+```
+
+Use `--opponents 1..8` for equal opponent ranges and `--range-percent` for a heuristic percentage range. Full results are sorted by simulated equity. **AA, KK, QQ, JJ, AKs, and AKo** receive educational premium labels, not unconditional instructions to play them. Position, price, opponents, and effective stacks still matter. A high random-opponent ranking is not a GTO opening chart.
+
+Catalog heroes use canonical suits: pairs/offsuit `c,d`, suited `c,c`. Actual suits map to the same class only when opponent ranges are suit-symmetric. Explicit physical combos are rejected in catalog mode; percentage ranges can cut suit classes and are labeled canonical estimates. Use `analyze` for exact physical-card matchups, blockers, boards, and pot odds. Preflop canonical cache entries are deliberately separate from physical-hand entries. Estimates built with low trial counts are noisy; increase trials for meaningful comparisons.
+
+## Watch A Local Table
+
+```sh
+./build/poker table --players 6 --hands 3 --trials 1000 \
+  --session practice1 --delay-ms 750
+
+./build/poker history show practice1_hand1_showdown
+./build/poker history stats
+```
+
+This automatically deals and renders a **local terminal demo**, showing hero's cards, rotating positions, pot, and visible board. Opponent holes stay hidden until showdown. Each street's equity uses only hero cards and the currently visible board, never the hidden deal. Each hand saves four unlabeled street snapshots and a labeled showdown with exact revealed holes and actual net chip result.
+
+Everyone antes one chip and checks down. Stacks reset to 100 each hand. There are no blinds, wagering decisions, opponent strategy, or interactive actions yet; this demonstrates dealing, visibility, chip conservation, and persistent tracking, not winning play. Use a new session ID for each run. Interrupted sessions cannot resume. `history stats` counts snapshots, not distinct hands; only the showdown snapshot contributes an observed outcome.
+
+This is not a GGPoker window attachment or real-time advice overlay. For external games, use completed hand records or post-session screenshots for review. This release does not implement an external capture/import pipeline.
+
 ## Review A Hand
 
 ```sh
@@ -99,7 +143,31 @@ This assumes the same equity when called, which can badly overvalue bluffs becau
 
 The study mix randomizes only among actions within an EV tolerance of the best toy-model action. Tolerance is the larger of 1% of the current pot and twice Monte Carlo standard error scaled by the aggressive terminal pot. Actions are softmax-weighted within that band. This is **not a GTO mixed strategy and does not establish unexploitable play**. The same seed gives the same sample. Only the call/fold/check legality is modeled; bet/raise suggestions need independent minimum-raise and betting-state validation.
 
-Confidence intervals measure simulation noise only. A wrong range can give a precise but wrong result. There is no rake, future street betting, equity realization adjustment, ICM, side-pot accounting, or bankroll/risk management.
+Confidence intervals measure simulation noise only. A wrong range can give a precise but wrong result. The baseline action model has no rake, future street betting, equity realization adjustment, ICM, side-pot accounting, or bankroll/risk management. The optional sensitivity report below is separate from that action model.
+
+## Implied-Odds Sensitivity
+
+The baseline action mix retains the one-street assumptions above. A separate **call-versus-fold sensitivity report** can stress-test rake, realization, implied winnings, and reverse-implied losses:
+
+```sh
+./build/poker analyze --hero AsKh --board 'Qs Jh 2c' \
+  --pot 100 --call 25 --stack 500 \
+  --villain 'alice,BTN,500,25,0.4' --range 'QQ,JJ,AK,AQs,KQs' \
+  --realization 0.75 --implied-win 60 --reverse-implied 20 \
+  --rake-percent 5 --rake-cap 3
+```
+
+Let `q = equity * realization`, current modeled rake `R = min((P+C)*rake_percent/100, rake_cap)`, conditional future net gain `W`, and conditional extra future loss `L`:
+
+```text
+adjusted_call_EV = q * (P + C - R + W) - C - (1-q)*L
+break_even_effective_equity = (C+L) / (P+C-R+W+L)
+required_conditional_future_gain = max(0, (C+(1-q)*L)/q - (P+C-R))
+```
+
+At zero effective equity, required future gain is infinite when there is a cost. Realization is a user-supplied stress-test proxy from 0 to 1, not a learned probability or exact implementation of strategic equity realization. `W` and `L` are conditional **net** amounts after future costs and rake; do not count your own returned bets as implied winnings. Current-pot rake is an approximation, not a site's complete fee schedule. The default rake rate is zero.
+
+The engine bounds future losses by hero's remaining stack after calling and future gains by aggregate opponent remaining chips; those are loose caps, not proof that the amounts are collectable. Future amounts are rejected on the river. Choose conservative assumptions and vary them: positive EV under an optimistic implied-payment guess is not evidence of a profitable strategy. The report does not estimate raise EV or change the baseline action mix. Sensitivity options cannot currently be combined with `--save`, preventing a saved recommendation from silently dropping its assumptions; the underlying equity is still cached.
 
 ## Implementation
 

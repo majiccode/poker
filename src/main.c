@@ -21,10 +21,17 @@ static void usage(void) {
          "  preflop heuristic range using position and profile PFR/VPIP.\n"
          "  --db PATH (default profiles.tsv) --trials N (default 20000)\n"
          "  --seed N (default 42) --bet N (total additional chips).\n"
+         "  Sensitivity: --realization 0..1 --implied-win CHIPS\n"
+         "    --reverse-implied CHIPS --rake-percent 0..100 --rake-cap CHIPS\n"
          "  --cache-dir PATH (default .poker-cache) --no-cache\n"
          "  --save ID [--profit SIGNED_NET_CHIPS] [--history-dir PATH]\n"
          "  poker history show ID [--history-dir PATH]\n"
          "  poker history stats [--history-dir PATH]\n"
+         "  poker catalog build|show [--hero AsKh (show only)]\n"
+         "    [--trials 2000 --seed 42 --jobs 4 --opponents 1]\n"
+         "    [--range 'QQ,AKs' | --range-percent 100] [--cache-dir PATH]\n"
+         "  poker table --hands 3 --players 6 --session demo\n"
+         "    [--trials 1000 --seed 42 --delay-ms 0 --history-dir PATH]\n"
          "  --board may be omitted for preflop. Pot includes outstanding bets;\n"
          "  stacks are chips remaining now, not starting stacks.\n"
          "\nRecord one opponent observation from a reviewed hand:\n"
@@ -88,6 +95,8 @@ static int analyze(int argc, char **argv) {
     const char *cache_dir = ".poker-cache", *history_dir = ".poker-hands", *save_id = NULL;
     bool use_cache = true, has_profit = false;
     double profit = 0;
+    PokerOddsAssumptions assumptions = {1, 0, 0, 0, 1e12};
+    bool sensitivity = false;
     const char *explicit_ranges[POKER_MAX_OPPONENTS] = {0};
     const char *profiles[POKER_MAX_OPPONENTS] = {0};
     const char *actions[POKER_MAX_OPPONENTS] = {0};
@@ -111,6 +120,15 @@ static int analyze(int argc, char **argv) {
             if (!number(value, &s.hero_stack)) goto invalid;
         } else if (!strcmp(key, "--bet")) {
             if (!number(value, &s.bet_size)) goto invalid;
+        } else if (!strcmp(key, "--realization") || !strcmp(key, "--implied-win") ||
+                   !strcmp(key, "--reverse-implied") || !strcmp(key, "--rake-percent") ||
+                   !strcmp(key, "--rake-cap")) {
+            double *target = !strcmp(key, "--realization") ? &assumptions.realization :
+                !strcmp(key, "--implied-win") ? &assumptions.future_win :
+                !strcmp(key, "--reverse-implied") ? &assumptions.future_loss :
+                !strcmp(key, "--rake-percent") ? &assumptions.rake_percent : &assumptions.rake_cap;
+            if (!number(value, target)) goto invalid;
+            sensitivity = true;
         } else if (!strcmp(key, "--db")) db = value;
         else if (!strcmp(key, "--cache-dir")) cache_dir = value;
         else if (!strcmp(key, "--history-dir")) history_dir = value;
@@ -175,6 +193,13 @@ static int analyze(int argc, char **argv) {
         }
     }
     if (!poker_scenario_validate(&s, error, sizeof(error))) goto invalid;
+    PokerOdds odds;
+    PokerEquity validation_equity = {0};
+    if (!poker_odds(&s, &validation_equity, &assumptions, &odds, error, sizeof(error))) goto invalid;
+    if (sensitivity && save_id) {
+        snprintf(error, sizeof(error), "Sensitivity reports are not persisted yet; omit --save or sensitivity options to avoid losing assumptions.");
+        goto invalid;
+    }
     for (size_t i = 0; i < s.opponent_count; ++i) if (s.opponents[i].stack < s.to_call) {
         snprintf(error, sizeof(error), "Short-stack/all-in geometry is unsupported; review separate pot eligibility first.");
         goto invalid;
@@ -197,6 +222,7 @@ static int analyze(int argc, char **argv) {
         free(ranges); goto invalid;
     }
     PokerAdvice a; poker_advice(&s, &e, &a);
+    if (!poker_odds(&s, &e, &assumptions, &odds, error, sizeof(error))) { free(ranges); goto invalid; }
     if (save_id && !poker_history_save(history_dir, save_id, &s, ranges, &e, &a,
                                      has_profit, profit, error, sizeof(error))) { free(ranges); goto invalid; }
     free(ranges);
@@ -216,6 +242,22 @@ static int analyze(int argc, char **argv) {
         printf("%s (%s): %zu combos after known-card blockers; %s\n", s.opponents[i].name,
                s.opponents[i].position, e.available_combos[i], explicit_ranges[i] ? explicit_ranges[i] : "heuristic top-percent range");
     printf("Call break-even equity: %.2f%%\n", 100 * s.to_call / (s.pot + s.to_call));
+    if (sensitivity) {
+        printf("\nCall-only sensitivity (user assumptions, not a solved strategy):\n"
+               "Realization %.1f%% | effective equity %.2f%% | modeled current-pot rake %.2f\n"
+               "Future net gain conditional on winning %.2f | extra loss conditional on losing %.2f\n"
+               "Immediate call EV after rake %.2f | adjusted call EV %.2f\n"
+               "Break-even effective equity %.2f%% | required conditional future gain %.2f\n",
+               100 * assumptions.realization, 100 * odds.effective_equity, odds.rake,
+               assumptions.future_win, assumptions.future_loss, odds.immediate_ev, odds.adjusted_ev,
+               100 * odds.break_even_equity, odds.required_future_win);
+        printf("Call-versus-fold under these assumptions: %s\n",
+               odds.adjusted_ev > 0 ? "call has positive estimated EV" :
+               odds.adjusted_ev < 0 ? "fold has higher estimated EV" : "equal estimated EV");
+        puts("This does not compare raises. Future amounts must fit remaining effective stacks;\n"
+             "they are net amounts after future costs/rake, not guaranteed payments.\n"
+             "Baseline EV/mix below ignores these sensitivity assumptions.");
+    }
     puts("\nToy one-street chip EV, NOT GTO or a prediction of profit:");
     if (s.to_call > 0) printf("Fold EV: 0.00\n");
     printf("%s EV: %.2f\n", s.to_call > 0 ? "Call" : "Check (showdown assumption)", a.call_ev);
@@ -282,6 +324,8 @@ int main(int argc, char **argv) {
     if (argc == 1 || !strcmp(argv[1], "--help") || !strcmp(argv[1], "help")) { usage(); return EXIT_SUCCESS; }
     if (!strcmp(argv[1], "analyze")) return analyze(argc - 2, argv + 2);
     if (!strcmp(argv[1], "profile")) return profile_command(argc - 2, argv + 2);
+    if (!strcmp(argv[1], "catalog")) return poker_catalog_command(argc - 2, argv + 2);
+    if (!strcmp(argv[1], "table")) return poker_table_command(argc - 2, argv + 2);
     if (!strcmp(argv[1], "history")) {
         const char *directory = ".poker-hands", *id = NULL;
         bool stats = argc >= 3 && !strcmp(argv[2], "stats");

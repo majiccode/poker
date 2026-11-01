@@ -63,6 +63,23 @@ typedef struct {
     uint64_t folded_to_bet;
 } PokerProfile;
 
+typedef struct {
+    double realization;
+    double future_win;
+    double future_loss;
+    double rake_percent;
+    double rake_cap;
+} PokerOddsAssumptions;
+typedef struct {
+    double pot_odds;
+    double effective_equity;
+    double rake;
+    double immediate_ev;
+    double adjusted_ev;
+    double required_future_win;
+    double break_even_equity;
+} PokerOdds;
+
 void poker_rng_seed(PokerRng *rng, uint64_t seed);
 uint64_t poker_rng_next(PokerRng *rng);
 unsigned poker_rng_bounded(PokerRng *rng, unsigned bound);
@@ -83,6 +100,12 @@ bool poker_equity(const PokerScenario *scenario, const PokerRange *ranges,
                   PokerEquity *result, char *error, size_t error_size);
 void poker_advice(const PokerScenario *scenario, const PokerEquity *equity,
                   PokerAdvice *advice);
+bool poker_odds(const PokerScenario *scenario, const PokerEquity *equity,
+                const PokerOddsAssumptions *assumptions, PokerOdds *odds,
+                char *error, size_t error_size);
+/* Standalone offline CLI commands. */
+int poker_catalog_command(int argc, char **argv);
+int poker_table_command(int argc, char **argv);
 bool poker_profile_load(const char *path, const char *name, PokerProfile *profile,
                         char *error, size_t error_size);
 bool poker_profile_save(const char *path, const PokerProfile *profile,

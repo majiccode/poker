@@ -1,8 +1,9 @@
 CC = cc
 CPPFLAGS = -Iinclude
 CFLAGS = -std=c11 -O2 -Wall -Wextra -Wpedantic -Werror
-LDLIBS = -lm
-CORE = src/cards.c src/range.c src/engine.c src/profile.c src/storage.c
+LDLIBS = -lm -pthread
+CORE = src/cards.c src/range.c src/engine.c src/profile.c src/storage.c src/odds.c
+COMMANDS = src/catalog.c src/table.c
 
 .PHONY: all test sanitize clean
 all: build/poker
@@ -10,8 +11,8 @@ all: build/poker
 build:
 	mkdir -p build
 
-build/poker: $(CORE) src/main.c include/poker.h | build
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(CORE) src/main.c $(LDFLAGS) $(LDLIBS) -o $@
+build/poker: $(CORE) $(COMMANDS) src/main.c include/poker.h | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(CORE) $(COMMANDS) src/main.c $(LDFLAGS) $(LDLIBS) -o $@
 
 build/test_poker: $(CORE) tests/test_poker.c include/poker.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(CORE) tests/test_poker.c $(LDFLAGS) $(LDLIBS) -o $@
@@ -19,10 +20,15 @@ build/test_poker: $(CORE) tests/test_poker.c include/poker.h | build
 build/test_storage: $(CORE) tests/test_storage.c include/poker.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(CORE) tests/test_storage.c $(LDFLAGS) $(LDLIBS) -o $@
 
-test: build/poker build/test_poker build/test_storage
+build/test_odds: $(CORE) tests/test_odds.c include/poker.h | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(CORE) tests/test_odds.c $(LDFLAGS) $(LDLIBS) -o $@
+
+test: build/poker build/test_poker build/test_storage build/test_odds
 	./build/test_poker
 	./build/test_storage
+	./build/test_odds
 	sh tests/cli.sh ./build/poker
+	sh tests/features.sh ./build/poker
 
 sanitize:
 	$(MAKE) clean
