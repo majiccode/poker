@@ -1,0 +1,4 @@
+hand_id	decision_id	player	street	position	players	pot	to_call	stack	action
+heldout1	d1	alice	river	BTN	2	100	25	500	fold
+heldout2	d1	bob	river	BTN	2	100	25	500	call
+heldout3	d1	unknown	flop	BB	4	100	50	300	fold

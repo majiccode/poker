@@ -3,7 +3,7 @@ CPPFLAGS = -Iinclude
 CFLAGS = -std=c11 -O2 -Wall -Wextra -Wpedantic -Werror
 LDLIBS = -lm -pthread
 CORE = src/cards.c src/range.c src/engine.c src/profile.c src/storage.c src/odds.c src/exact.c
-COMMANDS = src/catalog.c src/table.c src/train.c
+COMMANDS = src/catalog.c src/table.c src/train.c src/model.c
 
 .PHONY: all test sanitize clean
 all: build/poker
@@ -34,6 +34,7 @@ test: build/poker build/test_poker build/test_storage build/test_odds build/test
 	sh tests/cli.sh ./build/poker
 	sh tests/features.sh ./build/poker
 	sh tests/training.sh ./build/poker
+	sh tests/model.sh ./build/poker
 
 sanitize:
 	$(MAKE) clean

@@ -5,3 +5,5 @@
 /.poker-cache/
 /.poker-hands/
 /.poker-training/
+/actions.tsv
+/actions.tsv.tmp.*

@@ -35,6 +35,8 @@ static void usage(void) {
          "  poker train run --questions 10 --seed 42 --session baseline\n"
          "    [--progress-dir PATH] (answer call|fold and estimated equity %)\n"
          "  poker train stats [--progress-dir PATH]\n"
+         "  poker model import --input completed.tsv --dataset actions.tsv\n"
+         "  poker model predict|evaluate (see model --help for context options)\n"
          "  --board may be omitted for preflop. Pot includes outstanding bets;\n"
          "  stacks are chips remaining now, not starting stacks.\n"
          "\nRecord one opponent observation from a reviewed hand:\n"
@@ -344,6 +346,7 @@ int main(int argc, char **argv) {
     if (!strcmp(argv[1], "catalog")) return poker_catalog_command(argc - 2, argv + 2);
     if (!strcmp(argv[1], "table")) return poker_table_command(argc - 2, argv + 2);
     if (!strcmp(argv[1], "train")) return poker_train_command(argc - 2, argv + 2);
+    if (!strcmp(argv[1], "model")) return poker_model_command(argc - 2, argv + 2);
     if (!strcmp(argv[1], "history")) {
         const char *directory = ".poker-hands", *id = NULL;
         bool stats = argc >= 3 && !strcmp(argv[2], "stats");

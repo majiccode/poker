@@ -1,0 +1,7 @@
+hand_id	decision_id	player	street	position	players	pot	to_call	stack	action
+demo1	d1	alice	river	BTN	2	100	25	500	fold
+demo2	d1	alice	river	BTN	2	100	25	500	fold
+demo3	d1	alice	river	BTN	2	100	25	500	call
+demo4	d1	bob	river	BTN	2	100	25	500	call
+demo5	d1	bob	river	BTN	2	100	25	500	raise
+demo6	d1	bob	flop	BB	4	100	50	300	fold

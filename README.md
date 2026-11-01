@@ -4,6 +4,43 @@ A runnable C11 Texas Hold'em **offline study application**. Estimate your hand's
 
 This is an initial training engine, **not a GTO solver, autonomous poker bot, or guaranteed winning strategy**. It does not capture live tables, read hidden cards, click buttons, or provide a live decision overlay. Use completed hands, hypothetical scenarios, or permitted training environments.
 
+## Learn Opponent Responses
+
+The contextual response model learns **fold/call/raise frequencies when facing a bet** from completed-hand decision snapshots. It is separate from the equity/action engine: it does not infer hole cards or automatically supply fold probabilities to an EV recommendation.
+
+```sh
+./build/poker model import --input examples/actions-train.tsv --dataset actions.tsv
+./build/poker model predict --dataset actions.tsv --player alice \
+  --street river --position BTN --players 2 --pot 100 --call 25 --stack 500
+./build/poker model evaluate --dataset actions.tsv --test examples/actions-test.tsv
+```
+
+The examples are **synthetic format demonstrations**, not evidence of model quality. Native GGPoker hand-history parsing and screenshot ingestion are not implemented. Export reviewed decision snapshots into the exact tab-separated format below; include ordinary calls and folds, not only interesting showdowns:
+
+```text
+hand_id decision_id player street position players pot to_call stack action
+```
+
+Those ten fields must be separated by actual tabs, with the exact header shown in `examples/actions-train.tsv`. One row is one decision made while facing a bet. `hand_id` must be globally unique across source games/sites; `decision_id` is unique within a hand across all players. Names/IDs accept 1..48 ASCII letters, digits, underscores and hyphens. Street is preflop/flop/turn/river; position uses the supported table positions; players is the number of active players at that decision, 2..9. Pot includes the outstanding bet; to-call and remaining stack are positive and call cannot exceed stack. Action is fold/call/raise. Check/bet opportunities are not included in this model.
+
+Files require newline-terminated LF lines, no embedded NULs, finite positive decimal chip amounts at most one trillion, and at most 100,000 decisions. Import validates the entire source and existing target before atomic replacement. Matching semantic rows are skipped on reimport; conflicting IDs fail without overwriting the dataset. Files must be regular non-symlink files. New merged data is owner-only; single-writer use is required and containing-directory fsync is not implemented. Custom datasets are not automatically ignored by Git; do not commit private opponent data.
+
+Context combines street, position, active-player bucket (2, 3..5, 6..9), call price `to_call/(pot+to_call)` (at most .2, at most .333333, otherwise), and stack-to-terminal-pot ratio (at most 2, at most 6, otherwise). This loses information about board texture, previous actions, exact sizing, effective opponent stacks, and position availability. Input validation does not reconstruct a betting history or verify legal raises.
+
+For each action, `g` is the other players' global count with a uniform Dirichlet prior; `c` shrinks their matched context toward `g`; the queried player's matched context shrinks toward `c`:
+
+```text
+g = (population_global_action_count + 1) / (population_global_count + 3)
+c = (population_context_action_count + 20*g) / (population_context_count + 20)
+p = (player_context_action_count + 10*c) / (player_context_count + 10)
+```
+
+All queried-player rows are excluded from population counts. With little data the model stays near its baseline; it prints matched counts and fallback levels. The fixed strengths 20 and 10 are initial tuning choices, not learned optimal values. This is empirical hierarchical smoothing: global counts include contextual rows, and prior uncertainty is not propagated. Reported marginal posterior SD is conditional on the estimated prior, not a full uncertainty interval. Decisions within a hand are correlated, so row counts are not independent effective sample sizes.
+
+`evaluate` requires **disjoint hand IDs** in training and test files, rejecting overlap even if decisions differ. It never fits to test labels. It reports multiclass Brier score (0..2, lower better), natural-log loss (lower better), accuracy (0..1, higher better), and fold-probability reliability bins against a global-frequency baseline. Predictions use only training data. Evaluation is capped at 100 million train/test comparisons to bound the current scan-based implementation.
+
+Use time-separated completed sessions and keep all decisions from each hand in one split. Avoid tuning repeatedly on the same test set. Hand disjointness does not ensure time separation or rule out leakage introduced during data preparation. Tiny reliability bins are noisy; the report has no cluster-aware confidence intervals. An improved held-out prediction score is evidence about responses, **not** about profit or accurate hidden-card ranges. Revealed cards are selection-biased, so a future range model must account for missing folded cards rather than treating showdowns as representative.
+
 ## Measure Your Learning
 
 Practice estimating equity and choosing call/fold **before** seeing the answer:

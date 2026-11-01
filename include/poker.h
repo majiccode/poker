@@ -111,6 +111,7 @@ bool poker_odds(const PokerScenario *scenario, const PokerEquity *equity,
 int poker_catalog_command(int argc, char **argv);
 int poker_table_command(int argc, char **argv);
 int poker_train_command(int argc, char **argv);
+int poker_model_command(int argc, char **argv);
 bool poker_profile_load(const char *path, const char *name, PokerProfile *profile,
                         char *error, size_t error_size);
 bool poker_profile_save(const char *path, const PokerProfile *profile,
