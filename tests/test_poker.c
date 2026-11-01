@@ -591,6 +591,8 @@ static void test_advice(void)
     poker_advice(&s, &e, &a);
     CHECK(near(a.risk, 60) && a.aggressive_available);
     CHECK(near(a.aggressive_ev, 0.3 * 100 + 0.7 * (0.5 * 200 - 60)));
+    CHECK(a.aggressive_frequency == 0);
+    CHECK(strcmp(a.sampled_action, "raise") != 0 && strcmp(a.sampled_action, "bet") != 0);
     s.bet_size = 0;
     poker_advice(&s, &e, &a);
     CHECK(near(a.risk, 110));

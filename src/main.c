@@ -32,6 +32,9 @@ static void usage(void) {
          "    [--range 'QQ,AKs' | --range-percent 100] [--cache-dir PATH]\n"
          "  poker table --hands 3 --players 6 --session demo\n"
          "    [--trials 1000 --seed 42 --delay-ms 0 --history-dir PATH]\n"
+         "  poker train run --questions 10 --seed 42 --session baseline\n"
+         "    [--progress-dir PATH] (answer call|fold and estimated equity %)\n"
+         "  poker train stats [--progress-dir PATH]\n"
          "  --board may be omitted for preflop. Pot includes outstanding bets;\n"
          "  stacks are chips remaining now, not starting stacks.\n"
          "\nRecord one opponent observation from a reviewed hand:\n"
@@ -242,6 +245,19 @@ static int analyze(int argc, char **argv) {
         printf("%s (%s): %zu combos after known-card blockers; %s\n", s.opponents[i].name,
                s.opponents[i].position, e.available_combos[i], explicit_ranges[i] ? explicit_ranges[i] : "heuristic top-percent range");
     printf("Call break-even equity: %.2f%%\n", 100 * s.to_call / (s.pot + s.to_call));
+    double call_low = fmax(0, e.equity - 1.96 * e.standard_error) * (s.pot + s.to_call) - s.to_call;
+    double call_high = fmin(1, e.equity + 1.96 * e.standard_error) * (s.pot + s.to_call) - s.to_call;
+    printf("Baseline call EV simulation interval: %.2f..%.2f chips\n", call_low, call_high);
+    if (s.to_call > 0) {
+        printf("Call/fold comparison under full-realization assumptions: %s\n",
+               call_low > 0 ? "positive call EV throughout the simulation interval" :
+               call_high < 0 ? "negative call EV throughout the simulation interval" :
+               "unresolved by simulation precision; do not infer a preferred action");
+        if (e.equity > 0)
+            printf("Minimum realization proxy for break-even call (no rake/future gains): %.2f%%\n",
+                   100 * s.to_call / ((s.pot + s.to_call) * e.equity));
+    }
+    if (s.board_count < 5) puts("Future betting is unmodeled: this comparison is NOT a solved street decision.");
     if (sensitivity) {
         printf("\nCall-only sensitivity (user assumptions, not a solved strategy):\n"
                "Realization %.1f%% | effective equity %.2f%% | modeled current-pot rake %.2f\n"
@@ -262,13 +278,14 @@ static int analyze(int argc, char **argv) {
     if (s.to_call > 0) printf("Fold EV: 0.00\n");
     printf("%s EV: %.2f\n", s.to_call > 0 ? "Call" : "Check (showdown assumption)", a.call_ev);
     if (a.aggressive_available)
-        printf("%s EV: %.2f at %.2f additional chips (fold assumption %.1f%%)\n",
+        printf("Hypothetical %s EV: %.2f at %.2f additional chips (fold assumption %.1f%%)\n",
                s.to_call > 0 ? "Raise" : "Bet", a.aggressive_ev, a.risk, 100 * s.opponents[0].fold_to_bet);
     else puts("Bet/raise estimate unavailable: multiway or unsupported stack geometry.");
-    printf("Study mix: fold %.1f%% | %s %.1f%% | %s %.1f%%\n", 100 * a.fold_frequency,
+    puts("Bet/raise estimates are excluded from the mix: no modeled calling-range response.");
+    printf("Illustrative call/fold-only mix: fold %.1f%% | %s %.1f%% | %s %.1f%%\n", 100 * a.fold_frequency,
            s.to_call > 0 ? "call" : "check", 100 * a.call_frequency,
            s.to_call > 0 ? "raise" : "bet", 100 * a.aggressive_frequency);
-    printf("Sampled study action: %s\n", a.sampled_action);
+    printf("Sampled restricted-model action (not a full strategy): %s\n", a.sampled_action);
     puts("Assumes full equity realization, unchanged calling ranges and no future bets.\n"
          "No side pots, rake, ICM, minimum-raise validation, or betting-history model.\n"
          "Position/action adjustments are preflop heuristics, not solved ranges.\n"
@@ -326,6 +343,7 @@ int main(int argc, char **argv) {
     if (!strcmp(argv[1], "profile")) return profile_command(argc - 2, argv + 2);
     if (!strcmp(argv[1], "catalog")) return poker_catalog_command(argc - 2, argv + 2);
     if (!strcmp(argv[1], "table")) return poker_table_command(argc - 2, argv + 2);
+    if (!strcmp(argv[1], "train")) return poker_train_command(argc - 2, argv + 2);
     if (!strcmp(argv[1], "history")) {
         const char *directory = ".poker-hands", *id = NULL;
         bool stats = argc >= 3 && !strcmp(argv[2], "stats");

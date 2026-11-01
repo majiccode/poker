@@ -98,6 +98,10 @@ bool poker_scenario_validate(const PokerScenario *scenario, char *error,
                              size_t error_size);
 bool poker_equity(const PokerScenario *scenario, const PokerRange *ranges,
                   PokerEquity *result, char *error, size_t error_size);
+/* Exact weighted enumeration, heads-up river only. trials counts legal combos,
+ * standard_error=0; results must not be stored in the Monte Carlo cache. */
+bool poker_equity_river_exact(const PokerScenario *scenario, const PokerRange *range,
+                              PokerEquity *result, char *error, size_t error_size);
 void poker_advice(const PokerScenario *scenario, const PokerEquity *equity,
                   PokerAdvice *advice);
 bool poker_odds(const PokerScenario *scenario, const PokerEquity *equity,
@@ -106,6 +110,7 @@ bool poker_odds(const PokerScenario *scenario, const PokerEquity *equity,
 /* Standalone offline CLI commands. */
 int poker_catalog_command(int argc, char **argv);
 int poker_table_command(int argc, char **argv);
+int poker_train_command(int argc, char **argv);
 bool poker_profile_load(const char *path, const char *name, PokerProfile *profile,
                         char *error, size_t error_size);
 bool poker_profile_save(const char *path, const PokerProfile *profile,

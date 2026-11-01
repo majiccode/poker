@@ -135,10 +135,12 @@ void poker_advice(const PokerScenario *s, const PokerEquity *e, PokerAdvice *a) 
         a->aggressive_ev = fold * s->pot + (1 - fold) * called_ev;
     }
     double ev[3] = {0, a->call_ev, a->aggressive_ev};
-    bool legal[3] = {s->to_call > 0, true, a->aggressive_available};
+    /* Aggressive EV assumes an unchanged calling range, so it is illustrative
+       only and must not drive an action recommendation. */
+    bool legal[3] = {s->to_call > 0, true, false};
     double best = -INFINITY;
     for (int i = 0; i < 3; ++i) if (legal[i] && ev[i] > best) best = ev[i];
-    double tolerance = fmax(s->pot * 0.01, 2 * e->standard_error * (s->pot + 2 * a->risk));
+    double tolerance = fmax(s->pot * 0.01, 2 * e->standard_error * (s->pot + s->to_call));
     double weights[3] = {0}, total = 0;
     for (int i = 0; i < 3; ++i) if (legal[i] && best - ev[i] <= tolerance) {
         weights[i] = exp((ev[i] - best) / fmax(tolerance, 0.000001)); total += weights[i];

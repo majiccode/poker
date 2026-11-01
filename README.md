@@ -4,6 +4,32 @@ A runnable C11 Texas Hold'em **offline study application**. Estimate your hand's
 
 This is an initial training engine, **not a GTO solver, autonomous poker bot, or guaranteed winning strategy**. It does not capture live tables, read hidden cards, click buttons, or provide a live decision overlay. Use completed hands, hypothetical scenarios, or permitted training environments.
 
+## Measure Your Learning
+
+Practice estimating equity and choosing call/fold **before** seeing the answer:
+
+```sh
+./build/poker train run --questions 10 --seed 42 --session baseline
+# Enter answers such as: call 35 or fold 20
+./build/poker train stats
+
+# After studying, use a fresh seed for a separate assessment:
+./build/poker train run --questions 10 --seed 314 --session followup
+./build/poker train stats
+```
+
+Each drill is a final heads-up river decision against an explicit assumed range, with call/fold as the only available actions, no rake, and no future betting. The benchmark enumerates **every legal opponent combination**, weighted by the range, so there is no Monte Carlo sampling noise in the answer. It accounts for blockers and split pots. It is exact for this exercise, not proof that the assumed range describes a real opponent. Raises are excluded by the exercise, not assumed inferior in real poker.
+
+Feedback explains exact equity, the price's break-even threshold, call EV, the correct restricted action, and the EV cost of your choice. Persistent metrics report:
+
+- Decision accuracy against the restricted benchmark.
+- Mean normalized EV regret: missed expected chips divided by the current pot, averaged over questions. Lower is better; this measures decision quality, not lucky outcomes or actual money won.
+- Equity mean absolute error in percentage points. Lower is better.
+
+Sessions are immutable `.poker-training/SESSION.train` records. Use `--progress-dir PATH` for another directory. The versioned records retain seed, question count, and answers; questions and exact benchmarks are deterministically regenerated when checking stats. Changes to generation/evaluation semantics must version this format rather than silently regrade old answers. Invalid records are rejected. Interrupted sessions do not save partial answers. The parent directory must exist for a custom path; files are private to the current user. Atomic publication does not include directory fsync, so back up important records.
+
+Question sets exclude near-indifferent decisions with call EV within 0.5 chips of zero and sample synthetic ranges/boards, not a representative distribution of real river spots. Session summaries are sorted by filename, not time. Fresh seeds reduce memorization, but repeated seeds or reading feedback can contaminate an assessment. These metrics are useful evidence of the practiced skill, not a causal test of an online win-rate improvement. For stronger evidence, use larger unseen assessments and a consistent difficulty distribution, then separately evaluate representative completed hands after rake.
+
 ## Build
 
 Requires a C compiler, Make, and a POSIX environment. No third-party runtime dependencies. macOS: install Apple's command-line tools with `xcode-select --install`. Linux: install your distribution's C compiler and Make.
@@ -141,7 +167,9 @@ aggressive_EV = F*P + (1-F)*called_aggressive_EV
 
 This assumes the same equity when called, which can badly overvalue bluffs because actual calling ranges usually strengthen. Check EV assumes free showdown. Multiway bet/raise EV is intentionally unavailable rather than pretending all opponents respond independently with unchanged equity. Calling equity is reported multiway, but unequal stacks/side pots invalidate the simple EV model.
 
-The study mix randomizes only among actions within an EV tolerance of the best toy-model action. Tolerance is the larger of 1% of the current pot and twice Monte Carlo standard error scaled by the aggressive terminal pot. Actions are softmax-weighted within that band. This is **not a GTO mixed strategy and does not establish unexploitable play**. The same seed gives the same sample. Only the call/fold/check legality is modeled; bet/raise suggestions need independent minimum-raise and betting-state validation.
+The illustrative mix is now restricted to **call/fold**, or check when there is no call cost. Bet/raise EV remains a labeled hypothetical estimate and is **excluded from recommendations**, because the model does not know which hands continue against a raise. Tolerance is the larger of 1% of the current pot and twice Monte Carlo standard error scaled by the call terminal pot. Call/fold actions within that band are softmax-weighted. This is **not a GTO mixed strategy and does not establish unexploitable play**. The same seed gives the same sample. Existing saved reviews retain their historical mixes rather than being silently rewritten.
+
+Analysis also reports a call EV interval derived from Monte Carlo uncertainty, identifies when it crosses zero, and displays the minimum realization proxy needed to justify a call without rake or future winnings. An interval entirely above zero supports that modeled call, not a robust real-world recommendation: range uncertainty is still unmeasured. Before the river, the output explicitly warns that future betting is unmodeled.
 
 Confidence intervals measure simulation noise only. A wrong range can give a precise but wrong result. The baseline action model has no rake, future street betting, equity realization adjustment, ICM, side-pot accounting, or bankroll/risk management. The optional sensitivity report below is separate from that action model.
 
